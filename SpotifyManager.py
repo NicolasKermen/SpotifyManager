@@ -434,7 +434,7 @@ class cSpotifyManager:
 
 
     def findTracksInSpotifyDatabase(self, track):
-        def _select_result_from_spotify_search(searchString, trackName, spotifyMatchThreshold):
+        def _select_result_from_spotify_search(searchString, trackName, trackAlbum, spotifyMatchThreshold):
             self.cfg.io.printInfo(eCfgLogLevel.DBGLEVEL3, 'Searching Spotify for "%s" trying to find track called "%s"' % ( searchString, trackName))
 
             def _how_similar(a, b):
@@ -444,15 +444,30 @@ class cSpotifyManager:
                         ratio = spotifyMatchThreshold + 0.1
                 return ratio
 
-            resultsRaw = self.cfg.mySpotify.search(q=searchString, type='track', limit=30)
+            #if trackAlbum != None:
+            #   resultsRaw = self.cfg.mySpotify.search(q=trackAlbum.lower(), type='album', limit=30)
+            #    if resultsRaw:
+            #        albumId = resultsRaw['albums']['items'][0]['id']
+            #        resultsRaw = self.cfg.mySpotify.album_tracks(albumId, limit=30)
+            #else:
+
+            try:
+                resultsRaw = self.cfg.mySpotify.search(q=searchString, type='track', limit=50)
+            except:
+                self.cfg.io.printInfo(eCfgLogLevel.DBGLEVEL2, 'Not found: %s ' % searchString)
+                return 0
+
             if len(resultsRaw['tracks']['items']) > 0:
                 spotifyResults = resultsRaw['tracks']['items']
                 self.cfg.io.printInfo(eCfgLogLevel.DBGLEVEL2, 'Spotify results:%s' % len(spotifyResults))
                 for spotifyResult in spotifyResults:
-                    spotifyResult['rank'] = _how_similar(trackName, spotifyResult['name'])
-                    if spotifyResult['rank'] == 1.0:
-                        return {'id': spotifyResult['id'], 'title': spotifyResult['name'],
-                                'artist': spotifyResult['artists'][0]['name']}
+                    if trackAlbum.lower() in spotifyResult['album']['name'].lower() or spotifyResult['album']['name'].lower() in trackAlbum.lower():
+                        spotifyResult['rank'] = _how_similar(trackName.lower(), spotifyResult['name'].lower())
+                        if spotifyResult['rank'] == 1.0:
+                            return {'id': spotifyResult['id'], 'title': spotifyResult['name'],
+                                    'artist': spotifyResult['artists'][0]['name']}
+                    else:
+                        spotifyResult['rank'] = 0.0
                 spotifyResultsSorted = sorted(spotifyResults, key=lambda k: k['rank'], reverse=True)
                 if len(spotifyResultsSorted) > 0 and spotifyResultsSorted[0]['rank'] > spotifyMatchThreshold:
                     return {'id': spotifyResultsSorted[0]['id'], 'title': spotifyResultsSorted[0]['name'],
@@ -464,7 +479,7 @@ class cSpotifyManager:
         seachResult = False
         listOfPattern = self.getListOfPatterns(track)
         for p in listOfPattern:
-            seachResult = _select_result_from_spotify_search(p.searchString, p.title, spotifyMatchThreshold)
+            seachResult = _select_result_from_spotify_search(p.searchString, p.title, track.album, spotifyMatchThreshold)
             if seachResult:
                 return seachResult
         return False
