@@ -2,7 +2,8 @@
 # -*- coding: utf-8 -*-
 #
 #*################################################################################################*#
-import os, sys, argparse,datetime, time
+import os, sys, argparse,datetime, time, re
+import pathlib
 from pathlib import Path
 import unicodedata
 
@@ -431,71 +432,73 @@ class cSpotifyManager:
             liOfPatterns.append(cSearchPattern('%s %s' % (track.artist, t), t))
 
         return liOfPatterns
+    def howSimilar(self, a, b, searchString, spotifyMatchThreshold, trackName):
+        ratio = SequenceMatcher(None, a, b, spotifyMatchThreshold).ratio()
+        if ratio < spotifyMatchThreshold:
+            if searchString in trackName or trackName in searchString:
+                ratio = spotifyMatchThreshold + 0.1
+        return ratio
+    def selectResultFromSpotifySearch(self, searchString, trackName, trackAlbum):
+        self.cfg.io.printInfo(eCfgLogLevel.DBGLEVEL3,
+                              'Searching Spotify for "%s" trying to find track called "%s"' % (searchString, trackName))
+        spotifyMatchThreshold = 0.5
 
+        # if trackAlbum != None:
+        #   resultsRaw = self.cfg.mySpotify.search(q=trackAlbum.lower(), type='album', limit=30)
+        #    if resultsRaw:
+        #        albumId = resultsRaw['albums']['items'][0]['id']
+        #        resultsRaw = self.cfg.mySpotify.album_tracks(albumId, limit=30)
+        # else:
 
-    def findTracksInSpotifyDatabase(self, track):
-        def _select_result_from_spotify_search(searchString, trackName, trackAlbum, spotifyMatchThreshold):
-            self.cfg.io.printInfo(eCfgLogLevel.DBGLEVEL3, 'Searching Spotify for "%s" trying to find track called "%s"' % ( searchString, trackName))
-
-            def _how_similar(a, b):
-                ratio = SequenceMatcher(None, a, b).ratio()
-                if ratio < spotifyMatchThreshold:
-                    if searchString in trackName or trackName in searchString:
-                        ratio = spotifyMatchThreshold + 0.1
-                return ratio
-
-            #if trackAlbum != None:
-            #   resultsRaw = self.cfg.mySpotify.search(q=trackAlbum.lower(), type='album', limit=30)
-            #    if resultsRaw:
-            #        albumId = resultsRaw['albums']['items'][0]['id']
-            #        resultsRaw = self.cfg.mySpotify.album_tracks(albumId, limit=30)
-            #else:
-
-            try:
-                resultsRaw = self.cfg.mySpotify.search(q=searchString, type='track', limit=50)
-            except:
-                self.cfg.io.printInfo(eCfgLogLevel.DBGLEVEL2, 'Not found: %s ' % searchString)
-                return 0
-
-            if len(resultsRaw['tracks']['items']) > 0:
-                spotifyResults = resultsRaw['tracks']['items']
-                self.cfg.io.printInfo(eCfgLogLevel.DBGLEVEL2, 'Spotify results:%s' % len(spotifyResults))
-                for spotifyResult in spotifyResults:
-                    if trackAlbum.lower() in spotifyResult['album']['name'].lower() or spotifyResult['album']['name'].lower() in trackAlbum.lower():
-                        spotifyResult['rank'] = _how_similar(trackName.lower(), spotifyResult['name'].lower())
-                        if spotifyResult['rank'] == 1.0:
-                            return {'id': spotifyResult['id'], 'title': spotifyResult['name'],
-                                    'artist': spotifyResult['artists'][0]['name']}
-                    else:
-                        spotifyResult['rank'] = 0.0
-                spotifyResultsSorted = sorted(spotifyResults, key=lambda k: k['rank'], reverse=True)
-                if len(spotifyResultsSorted) > 0 and spotifyResultsSorted[0]['rank'] > spotifyMatchThreshold:
-                    return {'id': spotifyResultsSorted[0]['id'], 'title': spotifyResultsSorted[0]['name'],
-                            'artist': spotifyResultsSorted[0]['artists'][0]['name']}
-            self.cfg.io.printInfo(eCfgLogLevel.DBGLEVEL2, 'No good Spotify result found')
+        try:
+            resultsRaw = self.cfg.mySpotify.search(q=searchString, type='track', limit=50)
+        except:
+            self.cfg.io.printInfo(eCfgLogLevel.DBGLEVEL2, 'Not found: %s ' % searchString)
             return 0
 
-        spotifyMatchThreshold = 0.5
+        if len(resultsRaw['tracks']['items']) > 0:
+            spotifyResults = resultsRaw['tracks']['items']
+            self.cfg.io.printInfo(eCfgLogLevel.DBGLEVEL2, 'Spotify results:%s' % len(spotifyResults))
+            for spotifyResult in spotifyResults:
+                cleantrackAlbum = re.sub('\W+', '', trackAlbum).lower()
+                cleanSpotAlbum = re.sub('\W+', '', spotifyResult['album']['name']).lower()
+                if cleantrackAlbum in cleanSpotAlbum or cleanSpotAlbum in cleantrackAlbum:
+                    cleanTrackName = re.sub('\W+', '', trackName).lower()
+                    cleanSpotTrackName = re.sub('\W+', '', spotifyResult['name']).lower()
+                    spotifyResult['rank'] = self.howSimilar(cleanTrackName, cleanSpotTrackName, searchString,
+                                                            spotifyMatchThreshold, trackName)
+                    if spotifyResult['rank'] == 1.0:
+                        return {'id': spotifyResult['id'], 'title': spotifyResult['name'],
+                                'artist': spotifyResult['artists'][0]['name']}
+                else:
+                    spotifyResult['rank'] = 0.0
+            spotifyResultsSorted = sorted(spotifyResults, key=lambda k: k['rank'], reverse=True)
+            if len(spotifyResultsSorted) > 0 and spotifyResultsSorted[0]['rank'] > spotifyMatchThreshold:
+                return {'id': spotifyResultsSorted[0]['id'], 'title': spotifyResultsSorted[0]['name'],
+                        'artist': spotifyResultsSorted[0]['artists'][0]['name']}
+        self.cfg.io.printInfo(eCfgLogLevel.DBGLEVEL2, 'No good Spotify result found')
+        return 0
+
+    def findTracksInSpotifyDatabase(self, track):
+
         seachResult = False
         listOfPattern = self.getListOfPatterns(track)
         for p in listOfPattern:
-            seachResult = _select_result_from_spotify_search(p.searchString, p.title, track.album, spotifyMatchThreshold)
+            seachResult = self.selectResultFromSpotifySearch(p.searchString, p.title, track.album)
             if seachResult:
                 return seachResult
         return False
 
     def getTrackTags(self, path):
         tags = {}
-        p = path.replace('%20', ' ')
-
-        if os.path.exists(p):
-            extension = os.path.splitext(p)[1][1:].strip()
+        if os.path.exists(path):
+            extension = os.path.splitext(path)[1][1:].strip()
             if extension.lower() == 'mp3':
-                tags = self.getMp3TagsFromFile(p)
+                tags = self.getMp3TagsFromFile(path)
             elif extension.lower() == 'flac':
-                tags = self.getFlacTagsFromFile(p)
+                tags = self.getFlacTagsFromFile(path)
             elif extension.lower() == 'm4a':
-                tags = self.getM4aTagsFromFile(p)
+                tags = self.getM4aTagsFromFile(path)
             else:
                 self.cfg.io.printInfo(eCfgLogLevel.MAIN, '%s files not managed' % extension)
 
@@ -504,8 +507,8 @@ class cSpotifyManager:
                     tags[m] = unicodedata.normalize('NFKD', tags[m]).encode('ascii', 'ignore').decode('utf8').lower()
                 else:
                     tags[m] = 'undef'
-
-
+        else:
+            self.cfg.io.printInfo(eCfgLogLevel.MAIN, '%s is not a valid path' % path)
         return tags
 
     def createPlaylist(self, playListName, tracks):
@@ -514,7 +517,10 @@ class cSpotifyManager:
         nbFounded = 0
         NbTracks = len(tracks)
         for track in tracks:
-            t = cTrack(self.getTrackTags(track['path']))
+            t = track['path']
+            tPath = os.path.join(t)
+            loadedTags = self.getTrackTags(tPath)
+            t = cTrack(loadedTags)
             if t.isValid():
                 spotifyTrackData = self.findTracksInSpotifyDatabase(t)
                 if spotifyTrackData:
