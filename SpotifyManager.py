@@ -78,7 +78,7 @@ class InOut():
         
         self.logInFile = logInFile
         self.ioLogFilename = ioLogFilename
-        self.dbgLevel = eCfgLogLevel.MAIN
+        self.dbgLevel = eCfgLogLevel.INFO
         self.dumpInitLogs()
 
     def addDbgLogs(self,dbgLogs):
@@ -168,7 +168,7 @@ class cSpotifyManagerCfg:
 
     def __init__(self):
         
-        self.dbgLevel = eCfgLogLevel.MAIN
+        self.dbgLevel = eCfgLogLevel.INFO
         self.logInFile = False        
         self.configFilename = ''
         self.myTimeStats = TimeStats()
