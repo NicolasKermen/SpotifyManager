@@ -22,7 +22,7 @@ import mutagen.easymp4 as easyMp4
 def enum(**enums):
     return type('Enum', (), enums)
 #*############################################################################*#
-eCfgLogLevel = enum(MAIN=0, DBGLEVEL1=1, DBGLEVEL2=2, DBGLEVEL3=3, INFO=4)
+eCfgLogLevel = enum(MAIN=0, INFO=1, DBGLEVEL1=2, DBGLEVEL2=3, DBGLEVEL3=4)
 eUser = enum(NICO=0, JEANNE=1)
 ePosXExitCode = enum(OK=0, ERROR=1, MISUSE=2, CANNOTEXE=126, NOTFOUND=127, INVALID=128, CTRLC=130, OUTOFRANGE=255)
 eSpotifyManagerAction = enum(NONE=0, IMPORTPLAYLIST=1, SEARCH=2)
@@ -439,7 +439,7 @@ class cSpotifyManager:
                 ratio = spotifyMatchThreshold + 0.1
         return ratio
     def selectResultFromSpotifySearch(self, searchString, trackName, trackAlbum, trackArtist):
-        self.cfg.io.printInfo(eCfgLogLevel.DBGLEVEL3,
+        self.cfg.io.printInfo(eCfgLogLevel.DBGLEVEL1,
                               'Searching Spotify for "%s" trying to find track called "%s"' % (searchString, trackName))
         spotifyMatchThreshold = 0.5
 
@@ -453,12 +453,12 @@ class cSpotifyManager:
         try:
             resultsRaw = self.cfg.mySpotify.search(q=searchString, type='track', limit=50)
         except:
-            self.cfg.io.printInfo(eCfgLogLevel.DBGLEVEL2, 'Not found: %s ' % searchString)
+            self.cfg.io.printInfo(eCfgLogLevel.INFO, 'Not found: %s ' % searchString)
             return 0
 
         if len(resultsRaw['tracks']['items']) > 0:
             spotifyResults = resultsRaw['tracks']['items']
-            self.cfg.io.printInfo(eCfgLogLevel.DBGLEVEL2, 'Spotify results:%s' % len(spotifyResults))
+            self.cfg.io.printInfo(eCfgLogLevel.DBGLEVEL1, 'Spotify results:%s' % len(spotifyResults))
 
             cleanTrackAlbum = re.sub('\W+', '', trackAlbum).lower()
             cleanTrackArtist = re.sub('\W+', '', trackArtist).lower()
@@ -489,7 +489,7 @@ class cSpotifyManager:
             if len(spotifyResultsSorted) > 0 and spotifyResultsSorted[0]['rank'] > spotifyMatchThreshold:
                 return {'id': spotifyResultsSorted[0]['id'], 'title': spotifyResultsSorted[0]['name'],
                         'artist': spotifyResultsSorted[0]['artists'][0]['name']}
-        self.cfg.io.printInfo(eCfgLogLevel.DBGLEVEL2, 'No good Spotify result found')
+        self.cfg.io.printInfo(eCfgLogLevel.DBGLEVEL1, 'No good Spotify result found')
         return 0
 
     def findTracksInSpotifyDatabase(self, track):
@@ -543,7 +543,7 @@ class cSpotifyManager:
                     nbFounded += 1
                     self.cfg.io.printInfo(eCfgLogLevel.DBGLEVEL1, 'Loaded %s - %s - %s' % (t.track, t.artist, t.title))
                 else:
-                    self.cfg.io.printInfo(eCfgLogLevel.MAIN, '%s - %s - %s not found on spotify' % (t.track, t.artist, t.title))
+                    self.cfg.io.printInfo(eCfgLogLevel.INFO, '%s - %s - %s not found on spotify' % (t.track, t.artist, t.title))
             else:
                 self.cfg.io.printInfo(eCfgLogLevel.MAIN, '%s can not be read' % (track['path']))
 
